@@ -3,6 +3,8 @@ Python implementation of Loop-TRG with TensorFlow (For 2D Ising model on square 
 
 ## File structure
 
+lattice.py: create an the Ising system with a tensor assigned to each site
+
 filtering.py: entanglement filtering
 
 optimizing.py: change the square lattice to octagon
