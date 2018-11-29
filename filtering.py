@@ -2,7 +2,7 @@
 #  Loop_TRG
 #  remove entanglement and CDL tensors
 #
-#  Copyright (C) 2018 Zhengyuan Yue, Honghui Liu and Wenqian Zhang. All rights reserved.
+#  Copyright (C) 2018 Yue Zhengyuan, Liu Honghui and Zhang Wenqian. All rights reserved.
 #  Article reference: Phys. Rev. Lett. 118, 110504 (2017)
 #
 import numpy as np
@@ -37,9 +37,7 @@ def find_R_inf(T1, T2, T3, T4, epsilon):
 
 # find the projector PR, PL based on SVD of L_inf, R_inf
 def find_P(L_inf, R_inf):
-    TL_inf = tf.convert_to_tensor(L_inf)
-    TR_inf = tf.convert_to_tensor(R_inf)
-    s, u, v = tf.svd(TL_inf)
+    u, s, v = np.linalg.svd(L_inf)
     return u
 
 def update_T(P1, P2, P3, P4, T):
