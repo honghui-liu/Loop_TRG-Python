@@ -18,42 +18,30 @@ def adjoint(tensor):
     temp = np.conj(temp)
     return temp
 
-# convert 2x2x2x2 tensor to 4x4 matrix
-def to_matrix(tensor):
-    matrix = np.zeros((4,4))
-    for l,i in product(range(2),repeat=2):
-        matrix[2*l:2*l+2, 2*i:2*i+2] = tensor[l,i,:,:]
-    return matrix
-
-# convert 2x4 (4x2) matrix to 2x2x2 tensor
-def to_tensor(matrix):
-    tensor = np.zeros((2,2,2))
-    return tensor
-
 # get the initial value of the 8 S's using SVD
 # T: the tuple of tensors (TA, TB)
 
 def init_S(T):
     # convert T[0]/T[1] to 4x4 matrix mat[0], mat[1]
-    mat = to_matrix(T)
+    mat = T.reshape((4,4))
     result = []
     # do svd for mat
     for i in range(2):
-        u, s, vH = np.linalg.svd(mat[i], full_matrices=True)
+        u, s, v = np.linalg.svd(mat[i], full_matrices=True)
         # keep the largest (first 2) singular values
         s = s[0:2]
         diag_s = np.diag(s)
         s1 = np.sqrt(diag_s)
         s2 = np.sqrt(diag_s)
-        # keep the corresponding (first 2) rows/columns in u/vH
+        # keep the corresponding (first 2) rows/columns in u/v
         u = u[:,0:2]
-        vH = vH[0:2,:]
+        v = v[0:2,:]
         # find the decomposition
         temp1 = np.matmul(u,s1)
-        temp2 = np.matmul(s2,vH)
+        temp2 = np.matmul(s2,v)
         # convert the resulted matrix temp1/2 to 2x2x2 tensor s_tensor1/2
-        s_tensor1 = to_tensor(temp1)
-        s_tensor2 = to_tensor(temp2)
+        s_tensor1 = temp1.reshape((2,2,2))
+        s_tensor2 = temp2.reshape((2,2,2))
         result.append(s_tensor1)
         result.append(s_tensor2)
     
