@@ -9,15 +9,6 @@ import numpy as np
 import tensorflow as tf
 from itertools import product
 
-# measure the difference between two tensors T1, T2
-# using the sum of the squared difference
-# between all corresponding elements in them resp. 
-def tensor_error(T1, T2):
-    error = 0.0
-    dim = np.shape(T1)[0]
-    for r, u, l, d in product(dim, dim, dim, dim): 
-        error += (T1[r,u,l,d] - T2[r,u,l,d])**2
-    return error
 
 # find the matrix L_inf
 def find_L_inf(T1, T2, T3, T4, epsilon):
