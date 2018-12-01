@@ -3,8 +3,6 @@ Python implementation of Loop-TRG with NumPy (For 2D Ising model on square latti
 
 ## File structure
 
-lattice.py: create an the Ising system with a tensor assigned to each site
-
 filtering.py: entanglement filtering
 
 optimizing.py: change the square lattice to octagon
