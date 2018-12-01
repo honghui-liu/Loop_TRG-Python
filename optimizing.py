@@ -131,7 +131,7 @@ def optimize_S(ts_N, ts_W):
     # find matrix S'_(cd,e)
     mat_S = np.dot(np.linalg.inv(mat_N), mat_W)
     # convert matrix S' to tensor S'_(cde)
-    ts_S = mat_S.reshape((ts_N.shape[2],ts_N.shape[3], ts_W.shape[2]))
+    ts_S = mat_S.reshape((ts_N.shape[2], ts_N.shape[3], ts_W.shape[2]))
     # find the required S using S_(dec) = S'_(cde)
     ts_S = np.einsum('cde->dec', ts_S)
     return ts_S
