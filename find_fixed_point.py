@@ -1,4 +1,5 @@
 import numpy as np
+from itertools import product
 
 def contract_and_qr(r,tensor,D):
     contract = np.einsum('ab,bcde->acde',r,tensor)
@@ -111,12 +112,8 @@ def getvalue(i):
         value = 1.0
     return value
 
-def gettensor(belta):
+def gettensor(beta):
     T = np.ones([2,2,2,2])
-    for i in range(2):
-        for j in range(2):
-            for k in range(2):
-                for l in range(2):
-                    T[i,j,k,l] = np.exp(belta*(getvalue(i)*getvalue(j) + getvalue(j)*getvalue(k) +
-                                               getvalue(k)*getvalue(l) + getvalue(l)*getvalue(i)))
+    for i,j,k,l in product(range(2), repeat=4):
+        T[i,j,k,l] = np.exp(beta*(getvalue(i)*getvalue(j) + getvalue(j)*getvalue(k) + getvalue(k)*getvalue(l) + getvalue(l)*getvalue(i)))
     return T

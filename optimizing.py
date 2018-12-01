@@ -15,7 +15,7 @@ from itertools import product
 # d_cut: the upper limit of number of singular values to be kept
 # return: tuple of the initial values of the 8 S's
 def init_S(ts_T, d_cut):
-    d = ts_T.shape[0]
+    d = ts_T[0].shape[0]
     d2 = d**2
     dc = min(d2, d_cut)
     mat = []
@@ -39,14 +39,14 @@ def init_S(ts_T, d_cut):
         mat2 = np.matmul(s2,mat_V)
         # convert the resulted matrix to dxdxdc tensor
         ts_S1 = mat1.reshape((d,d,dc))
-        ts_S2 = mat2.reshape((d,d,dc))
+        ts_S2 = mat2.reshape((dc,d,d))
         ts_Result.append(ts_S1)
         ts_Result.append(ts_S2)
     
-    ts_Result.append(ts_Result[1])
-    ts_Result.append(ts_Result[0])
-    ts_Result.append(ts_Result[3])
-    ts_Result.append(ts_Result[2])
+    ts_Result.append(np.einsum('nkb->kbn',ts_Result[1]))
+    ts_Result.append(np.einsum('ajn->naj',ts_Result[0]))
+    ts_Result.append(np.einsum('rnc->ncr',ts_Result[3]))
+    ts_Result.append(np.einsum('bmr->rbm',ts_Result[2]))
     # elements in result:
     # S1, S2, S3, S4, S2, S1, S4, S3
     return tuple(ts_Result)
@@ -57,7 +57,7 @@ def init_S(ts_T, d_cut):
 def tensor_N(i, ts_S):
     num = len(ts_S)     # should be 8
     ts_S_conj = np.conj(ts_S)
-    for j in range(i+1, i+num-1):
+    for j in range(i+1, i+num):
         # k takes values i+1, ..., len(S)-1, 0, ..., i-1
         if j <= num - 1:
             k = j
@@ -68,7 +68,7 @@ def tensor_N(i, ts_S):
         if j == i + 1:
             ts_N = ts_A
         else: 
-            ts_N = np.einsum('abcd,bedf->aecf', ts_N, ts_A)
+            ts_N = np.einsum('ijst,jktu->iksu', ts_N, ts_A)
     return ts_N
 
 # calculate the tensor W_i
@@ -81,12 +81,16 @@ def tensor_W(i, ts_S, ts_T):
     # 2: S[4],S[5],T[0]; 3: S[6],S[7],T[1];
     # --> j: S[2j],S[2j+1],T[ab]    (ab := int(j/2)%2)
     pair = int(i / 2)
-    # ab = 0 -> use TA = T[0]; ab = 1 -> use TB = T[1]
-    ab = pair % 2
     ts_S_conj = np.conj(ts_S)
 
+    # transpose the tensors TA, TB
+    ts_T_list = []
+    ts_T_list.append(ts_T[0])
+    ts_T_list.append(np.einsum('cbmn->bmnc', ts_T[1]))
+    ts_T_list.append(np.einsum('qdcp->cpqd', ts_T[0]))
+    ts_T_list.append(np.einsum('liad->dlia', ts_T[1]))
+
     if i % 2 == 0:              # W starts with C
-        ts_C = np.einsum('bed,fceg->bdcfg', ts_S_conj[i+1], ts_T[ab])
         for p in range(pair, pair + 4):
             # j takes the value p, p+1, ... 3, 0, ..., p-1
             if p <= 3:
@@ -95,30 +99,31 @@ def tensor_W(i, ts_S, ts_T):
                 j = p - 4
 
             if p == pair:       # W starts with C
+                ts_C = np.einsum('bed,fceg->bdfcg', ts_S_conj[i+1], ts_T_list[j])
                 ts_W = ts_C
             elif p == pair + 3: # contract with the last tensor (B)
-                ts_B = np.einsum('dpm,mqn,gpqr->dngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T[int(j/2)%2])
-                ts_W = np.einsum('bncfr,narf->bac', ts_W, ts_B)
+                ts_B = np.einsum('dpm,mqn,gpqr->dngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T_list[j])
+                ts_W = np.einsum('bdfcg,dagf->bac', ts_W, ts_B)
             else: 
-                ts_B = np.einsum('dpm,mqn,gpqr->dngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T[int(j/2)%2])
-                ts_W = np.einsum('bdcfg,dngr->bncfr', ts_W, ts_B)
+                ts_B = np.einsum('dpm,mqn,gpqr->dngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T_list[j])
+                ts_W = np.einsum('bdfcg,dngr->bnfcr', ts_W, ts_B)
 
     elif i % 2 != 0:            # W starts with B
-        ts_C = np.einsum('dae,fecg->dacfg', np.conj(ts_S[i-1]), ts_T[ab])
         for p in range(pair, pair + 4):
             if p <= 3:
                 j = p
             elif p >= 4:
                 j = p - 4
 
-            if j == pair:       # W starts with B
-                ts_B = np.einsum('bpm,mqn,gpqr->bngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T[int(j/2)%2])
+            if p == pair:       # W starts with B
+                ts_B = np.einsum('bpm,mqn,gpqr->bngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T_list[j])
                 ts_W = ts_B
-            elif j == pair + 3: # contract with the last tensor (C)
-                ts_W = np.einsum('ndgf,dacfg->aln', ts_W, ts_C)
+            elif p == pair + 3: # contract with the last tensor (C)
+                ts_C = np.einsum('dea,fecg->dafcg', np.conj(ts_S[i-1]), ts_T_list[j])
+                ts_W = np.einsum('bdgf,dafcg->bac', ts_W, ts_C)
             else:
-                ts_B = np.einsum('bpm,mqn,gpqr->bngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T[int(j/2)%2])
-                ts_W = np.einsum('abcd,bedf->aecf', ts_W, ts_B)
+                ts_B = np.einsum('bpm,mqn,gpqr->bngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T_list[j])
+                ts_W = np.einsum('bngr,ndrf->bdgf', ts_W, ts_B)
     return ts_W
 
 # solve the equation (N_i)(S_i) = (W_i) for (S_i)
@@ -150,11 +155,12 @@ def loop_optimize(ts_T, d_cut, error_limit):
     num = len(ts_S_old)    # should be 8
     # loop-optimizing the 8 S's
     while (error > error_limit):
+        error = 0.0
         for i in range(num):
             ts_N = tensor_N(i, ts_S_old)
             ts_W = tensor_W(i, ts_S_old, ts_T)
             ts_S_new[i] = optimize_S(ts_N, ts_W)
-        error = np.linalg.norm(ts_S_new - ts_S_old)
+            error += np.linalg.norm(ts_S_new[i] - ts_S_old[i])
         ts_S_old = ts_S_new.copy()
     # construct new tensors TA/TB from the optimized 8 S's
     ts_TA = np.einsum('dla,aib,bjc,ckd->lijk',ts_S_new[5],ts_S_new[4],ts_S_new[1],ts_S_new[8])
