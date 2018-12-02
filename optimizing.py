@@ -79,7 +79,7 @@ def tensor_W(i, ts_S, ts_T):
     # grouping the tensors
     # 0: S[0],S[1],T[0]; 1: S[2],S[3],T[1];
     # 2: S[4],S[5],T[0]; 3: S[6],S[7],T[1];
-    # --> j: S[2j],S[2j+1],T[ab]    (ab := int(j/2)%2)
+    # --> j: S[2j],S[2j+1],T[j]
     pair = int(i / 2)
     ts_S_conj = np.conj(ts_S)
 
@@ -163,6 +163,16 @@ def loop_optimize(ts_T, d_cut, error_limit):
             error += np.linalg.norm(ts_S_new[i] - ts_S_old[i])
         ts_S_old = ts_S_new.copy()
     # construct new tensors TA/TB from the optimized 8 S's
-    ts_TA = np.einsum('dla,aib,bjc,ckd->lijk',ts_S_new[5],ts_S_new[4],ts_S_new[1],ts_S_new[8])
-    ts_TB = np.einsum('dla,aib,bjc,ckd->lijk',ts_S_new[2],ts_S_new[7],ts_S_new[6],ts_S_new[3])
+    # transposition is needed
+    ts_S_new[0] = np.einsum('dcj->cjd',ts_S_new[0])
+    ts_S_new[1] = np.einsum('lba->alb',ts_S_new[1])
+    ts_S_new[2] = np.einsum('adk->dka',ts_S_new[2])
+    ts_S_new[3] = np.einsum('icb->bic',ts_S_new[3])
+    ts_S_new[4] = np.einsum('bal->alb',ts_S_new[4])
+    ts_S_new[5] = np.einsum('jdc->cjd',ts_S_new[5])
+    ts_S_new[6] = np.einsum('cbi->bic',ts_S_new[6])
+    ts_S_new[7] = np.einsum('kad->dka',ts_S_new[7])
+
+    ts_TA = np.einsum('alb,bic,cjd,dka->lijk',ts_S_new[4],ts_S_new[3],ts_S_new[0],ts_S_new[7])
+    ts_TB = np.einsum('alb,bic,cjd,dka->lijk',ts_S_new[1],ts_S_new[6],ts_S_new[5],ts_S_new[2])
     return ts_TA, ts_TB
