@@ -37,7 +37,7 @@ def init_S(ts_T, d_cut):
         # find the decomposition
         mat1 = np.matmul(mat_U,s1)
         mat2 = np.matmul(s2,mat_V)
-        # convert the resulted matrix to dxdxdc tensor
+        # convert the resulted matrix to d x d x dc tensor
         ts_S1 = mat1.reshape((d,d,dc))
         ts_S2 = mat2.reshape((dc,d,d))
         ts_Result.append(ts_S1)
@@ -126,6 +126,18 @@ def tensor_W(i, ts_S, ts_T):
                 ts_W = np.einsum('bngr,ndrf->bdgf', ts_W, ts_B)
     return ts_W
 
+# find the inverse of a martix using SVD
+def mat_inv_svd(matrix):
+    mat_U, s, mat_V = np.linalg.svd(matrix, full_matrices=True)
+    # keep the all the singular values
+    s = 1 / s
+    diag_s = np.diag(s)
+    mat_UH = np.conj(np.transpose(mat_U))
+    mat_VH = np.conj(np.transpose(mat_V))
+    mat_Result = np.dot(diag_s, mat_UH)
+    mat_Result = np.dot(mat_VH, mat_Result)
+    return mat_Result
+
 # solve the equation (N_i)(S_i) = (W_i) for (S_i)
 # return: the solution S_i = (N_i)^(-1) * (W_i)
 def optimize_S(ts_N, ts_W):
@@ -135,6 +147,7 @@ def optimize_S(ts_N, ts_W):
     mat_W = ts_W.reshape((ts_W.shape[0]*ts_W.shape[1], ts_W.shape[2]))
     # find matrix S'_(cd,e)
     mat_S = np.dot(np.linalg.inv(mat_N), mat_W)
+    # mat_S = np.dot(mat_inv_svd(mat_N), mat_W)
     # convert matrix S' to tensor S'_(cde)
     ts_S = mat_S.reshape((ts_N.shape[2], ts_N.shape[3], ts_W.shape[2]))
     # find the required S using S_(dec) = S'_(cde)
