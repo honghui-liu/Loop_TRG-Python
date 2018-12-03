@@ -1,5 +1,5 @@
 import numpy as np
-import find_fixed_point
+import find_fixed_point as ffp
 
 def get_one_projector(Left_fixed_point, Right_fixed_point):
     left = Left_fixed_point.copy()
@@ -28,8 +28,8 @@ def get_one_projector(Left_fixed_point, Right_fixed_point):
         
     # get all the matrices needed to compute projector    
     modified_s = np.diag(modified_s)
-    uh = find_fixed_point.dagger(u)
-    v = find_fixed_point.dagger(vh)
+    uh = ffp.dagger(u)
+    v = ffp.dagger(vh)
     
     right_projector = np.dot(np.dot(right,v),modified_s)
     left_projector  = np.dot(np.dot(modified_s,uh),left)
@@ -41,8 +41,8 @@ def filter(Tensor_A,Tensor_B):
     filter_tensor_B = Tensor_B.copy()
     
     #get all the fixed point
-    All_left_fixed_point = find_fixed_point.left_fixed_point(Tensor_A,Tensor_B,Tensor_A,Tensor_B,D)
-    All_right_fixed_point = find_fixed_point.right_fixed_point(Tensor_A,Tensor_B,Tensor_A,Tensor_B,D)
+    All_left_fixed_point = ffp.left_fixed_point(Tensor_A,Tensor_B,Tensor_A,Tensor_B,D)
+    All_right_fixed_point = ffp.right_fixed_point(Tensor_A,Tensor_B,Tensor_A,Tensor_B,D)
     
     #get all projectors
     All_left_projector = [None]*4
