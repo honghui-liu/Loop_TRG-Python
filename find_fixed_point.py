@@ -1,8 +1,8 @@
 import numpy as np
 from itertools import product
 
-def contract_and_qr(r,tensor,D):
-    contract = np.einsum('ab,bcde->acde',r,tensor)
+def contract_and_qr(mat_R,ts_T,D):
+    contract = np.einsum('ab,bcde->acde',mat_R,ts_T)
     matrix = contract.reshape((D*D*D,D))
     q, r = np.linalg.qr(matrix)
     return r

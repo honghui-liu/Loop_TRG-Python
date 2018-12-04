@@ -3,7 +3,7 @@
 #  Loop_TRG
 #  Perform SVD to transform square to octagon and optimize it
 #
-#  Written by Yue Zhengyuan, Liu Honghui and Zhang Wenqian. All rights reserved.
+#  Copyright (C) 2018 Yue Zhengyuan, Liu Honghui and Zhang Wenqian. All rights reserved.
 #  Article reference: Phys. Rev. Lett. 118, 110504 (2017)
 #
 
@@ -56,6 +56,25 @@ def init_S(ts_T, d_cut):
     # S1, S2, S3, S4, S2, S1, S4, S3
     return tuple(ts_Result), used_cutoff
 
+# calculate the constant C
+def const_C(ts_T):
+    # transpose the tensors TA, TB
+    ts_T_list = []
+    ts_T_list.append(ts_T[0])
+    ts_T_list.append(np.einsum('cbmn->bmnc', ts_T[1]))
+    ts_T_list.append(np.einsum('qdcp->cpqd', ts_T[0]))
+    ts_T_list.append(np.einsum('liad->dlia', ts_T[1]))
+
+    for i in range(4):
+        ts_Temp = np.einsum('ebch,abcd->ehad',ts_T_list[i], ts_T_list[i])
+        if i == 0:
+            ts_C = ts_Temp
+        elif i == 3:
+            ts_C = np.einsum('heda,ehad',ts_C,ts_Temp)
+        else:
+            ts_C = np.einsum('mena,ehad->mhnd',ts_C,ts_Temp)
+    return ts_C
+
 # calculate the tensor N_i (i = 0 ~ 7)
 # ts_S: the tuple of tensors S[k] (k = 0 ~ 7)
 # return: ts_N_i
@@ -63,11 +82,11 @@ def tensor_N(i, ts_S):
     num = len(ts_S)     # should be 8
     ts_S_conj = np.conj(ts_S)
     for j in range(i+1, i+num):
-        # k takes values i+1, ..., len(S)-1, 0, ..., i-1
+        # k takes values i+1, ..., num-1, 0, ..., i-1
         if j <= num - 1:
             k = j
-        elif j >= len(ts_S):
-            k = j - len(ts_S)
+        elif j >= num:
+            k = j - num
         # contract (S[k]+) and S[k] first to find a tensor ts_A
         ts_A = np.einsum('icj,sct->ijst', ts_S_conj[k], ts_S[k])
         if j == i + 1:
@@ -131,18 +150,6 @@ def tensor_W(i, ts_S, ts_T):
                 ts_W = np.einsum('bngr,ndrf->bdgf', ts_W, ts_B)
     return ts_W
 
-# find the inverse of a martix using SVD
-def mat_inv_svd(matrix):
-    mat_U, s, mat_V = np.linalg.svd(matrix, full_matrices=True)
-    # keep the all the singular values
-    s = 1 / s
-    diag_s = np.diag(s)
-    mat_UH = np.conj(np.transpose(mat_U))
-    mat_VH = np.conj(np.transpose(mat_V))
-    mat_Result = np.dot(diag_s, mat_UH)
-    mat_Result = np.dot(mat_VH, mat_Result)
-    return mat_Result
-
 # solve the equation (N_i)(S_i) = (W_i) for (S_i)
 # return: the solution S_i = (N_i)^(-1) * (W_i)
 def optimize_S(ts_N, ts_W):
@@ -152,12 +159,25 @@ def optimize_S(ts_N, ts_W):
     mat_W = ts_W.reshape((ts_W.shape[0]*ts_W.shape[1], ts_W.shape[2]))
     # find matrix S'_(cd,e)
     mat_S = np.dot(np.linalg.inv(mat_N), mat_W)
-    # mat_S = np.dot(mat_inv_svd(mat_N), mat_W)
     # convert matrix S' to tensor S'_(cde)
     ts_S = mat_S.reshape((ts_N.shape[2], ts_N.shape[3], ts_W.shape[2]))
     # find the required S using S_(dec) = S'_(cde)
     ts_S = np.einsum('cde->dec', ts_S)
     return ts_S
+
+# the cost function for the replacement of the 4 T by the 8 S
+def cost_func(i, ts_S, ts_T):
+    term1 = const_C(ts_T)
+
+    ts_N = tensor_N(i, ts_S)
+    term2 = np.einsum('cea,acbd,deb',np.conj(ts_S[i]),ts_N,ts_S[i])
+
+    ts_W = tensor_W(i, ts_S, ts_T)
+    ts_W = np.einsum('bac->acb',ts_W)
+    term3 = np.einsum('acb,acb',ts_S[i],np.conj(ts_W))
+    term4 = np.einsum('acb,acb',np.conj(ts_S[i]),ts_W)
+
+    return term1 + term2 - term3 - term4
 
 # loop-optimize the 8 tensors ts_S[i] (i = 0 ~ 7)
 # then build the new TA, TB from the 8 S's
@@ -172,10 +192,14 @@ def loop_optimize(ts_T, d_cut, error_limit):
     ts_S_old = list(ts_S_old)
     ts_S_new = ts_S_old.copy()
     num = len(ts_S_old)    # should be 8
+    for i in range(num):
+        cost = cost_func(i, ts_S_new, ts_T)
+        print('S', i, '\tcost = ', cost)
     # loop-optimizing the 8 S's
     # if used_cutoff == 0:
     #     pass
     # elif used_cutoff == 1:
+    loop_round = 0
     while (error > error_limit):
         error = 0.0
         for i in range(num):
@@ -184,6 +208,7 @@ def loop_optimize(ts_T, d_cut, error_limit):
             ts_Temp = optimize_S(ts_N, ts_W)
             error += np.linalg.norm(ts_Temp - ts_S_old[i])
             ts_S_new[i] = ts_Temp
+        loop_round += 1
     # ts_S_old = ts_S_new.copy()
     # construct new tensors TA/TB from the optimized 8 S's
     # transposition is needed
