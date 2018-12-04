@@ -1,7 +1,7 @@
 #  
 #  main.py
 #  Loop_TRG
-#  main program for the TRG calculation of the partition function
+#  Main program for TRG calculation
 #
 #  Copyright (C) 2018 Yue Zhengyuan, Liu Honghui and Zhang Wenqian. All rights reserved.
 #  Article reference: Phys. Rev. Lett. 118, 110504 (2017)
@@ -12,25 +12,47 @@ import filtering as flt
 import optimizing as opt
 from itertools import product
 
-beta = 1/4
+temperature = 4
 
 # assign the initial value of tensor TA, TB (2D Ising model)
-ts_TA = np.ones((2,2,2,2),dtype=complex)
-# ts_TA[0,1,0,1] = np.exp(-4*beta)
-# ts_TA[1,0,1,0] = np.exp(-4*beta)
-# ts_TA[0,0,0,0] = np.exp(4*beta)
-# ts_TA[1,1,1,1] = np.exp(4*beta)
-for l,u,r,d in product(range(2), repeat=4):
-    ts_TA[l,u,r,d] = (1+(2*l-1)*(2*u-1)*(2*r-1)*(2*d-1))/2 * np.exp(beta*(l+u+r+d-2))
-ts_TB = ts_TA.copy()
+ts_T_A0 = np.ones((2,2,2,2),dtype=complex)
+ts_T_A0[0,1,0,1] = np.exp(-4/temperature)
+ts_T_A0[1,0,1,0] = np.exp(-4/temperature)
+ts_T_A0[0,0,0,0] = np.exp(4/temperature)
+ts_T_A0[1,1,1,1] = np.exp(4/temperature)
+ts_T_B0 = ts_T_A0.copy()
 
-# partition function for 8 sites
-# print(np.einsum('mnfe,pqhg,heib,fgaj,ijkl,abcd,clmq,kdpn',ts_TA,ts_TA,ts_TB,ts_TB,ts_TA,ts_TA,ts_TB,ts_TB))
+# the scaling is applied to the 4 -> 2 process
+# tensor normalization constant
+gamma_A0 = np.einsum('lulu', ts_T_A0)
+gamma_B0 = np.einsum('lulu', ts_T_B0)
+# normalized tensor before RG
+ts_TN_A0 = ts_T_A0 / gamma_A0
+ts_TN_B0 = ts_T_B0 / gamma_B0
 
-for i in range(1,3):
+for i in range(3):
+    # normalized partition function for 4 sites
+    part_ZN0 = np.einsum('ajkb,cbmj,mdci,kiad', ts_TN_A0,ts_TN_B0,ts_TN_A0,ts_TN_B0)
     # entanglement filtering
-    ts_TA, ts_TB = flt.filter(ts_TA, ts_TB)
-    # loop optimize
-    ts_TA, ts_TB = opt.loop_optimize((ts_TA,ts_TB), 16, 10E-5)
-    partition_Z = np.einsum('ajkb,cbmj,mdci,kiad', ts_TA,ts_TB,ts_TA,ts_TB)
-    print(i, partition_Z)
+    ts_T_A1, ts_T_B1 = flt.filter(ts_TN_A0, ts_TN_B0)
+    # loop optimize to find the new tensors
+    ts_T_A1, ts_T_B1 = opt.loop_optimize((ts_T_A1,ts_T_B1), 16, 10E-10)
+    # tensor normalization constant
+    gamma_A1 = np.einsum('lulu', ts_T_A1)
+    gamma_B1 = np.einsum('lulu', ts_T_B1)
+    # normalized tensor after RG
+    ts_TN_A1 = ts_T_A1 / gamma_A1
+    ts_TN_B1 = ts_T_B1 / gamma_B1
+    # normalized partition function for 2 sites
+    part_ZN1 = np.einsum('dcba,badc', ts_TN_A1,ts_TN_B1)
+
+    # scaling constant for normalized tensor (method 2)
+    scale_fA = np.sqrt(part_ZN0/part_ZN1)
+    scale_fB = scale_fA
+
+    ts_TN_A0 = ts_TN_A1.copy()
+    ts_TN_B0 = ts_TN_B1.copy()
+
+    # ts_TN_A0 *= scale_fA
+    # ts_TN_B0 *= scale_fB
+    print(i, scale_fA, scale_fB)

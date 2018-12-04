@@ -1,9 +1,9 @@
 #  
 #  optimizing.py
 #  Loop_TRG
-#  perform SVD to transform square to octagon and optimize it
+#  Perform SVD to transform square to octagon and optimize it
 #
-#  Copyright (C) 2018 Yue Zhengyuan, Liu Honghui and Zhang Wenqian. All rights reserved.
+#  Written by Yue Zhengyuan, Liu Honghui and Zhang Wenqian. All rights reserved.
 #  Article reference: Phys. Rev. Lett. 118, 110504 (2017)
 #
 
@@ -14,10 +14,15 @@ from itertools import product
 # ts_T: the tuple of tensors (TA, TB)
 # d_cut: the upper limit of number of singular values to be kept
 # return: tuple of the initial values of the 8 S's
+#         whether the cutoff is used (0: not used; 1: used)  
 def init_S(ts_T, d_cut):
     d = ts_T[0].shape[0]
     d2 = d**2
-    dc = min(d2, d_cut)
+    dc = d_cut
+    used_cutoff = 1
+    if (d_cut >= d2):
+        dc = d2
+        used_cutoff = 0
     mat = []
     # convert T[0]/T[1] to (d^2)x(d^2) matrix mat[0], mat[1]
     mat.append(ts_T[0].reshape((d2,d2))) 
@@ -49,7 +54,7 @@ def init_S(ts_T, d_cut):
     ts_Result.append(np.einsum('bmr->rbm',ts_Result[2]))
     # elements in result:
     # S1, S2, S3, S4, S2, S1, S4, S3
-    return tuple(ts_Result)
+    return tuple(ts_Result), used_cutoff
 
 # calculate the tensor N_i (i = 0 ~ 7)
 # ts_S: the tuple of tensors S[k] (k = 0 ~ 7)
@@ -163,18 +168,23 @@ def optimize_S(ts_N, ts_W):
 def loop_optimize(ts_T, d_cut, error_limit):
     error = np.inf
     # initialize the 8 tensors S
-    ts_S_old = list(init_S(ts_T, d_cut))
+    ts_S_old, used_cutoff = init_S(ts_T, d_cut)
+    ts_S_old = list(ts_S_old)
     ts_S_new = ts_S_old.copy()
     num = len(ts_S_old)    # should be 8
     # loop-optimizing the 8 S's
+    # if used_cutoff == 0:
+    #     pass
+    # elif used_cutoff == 1:
     while (error > error_limit):
         error = 0.0
         for i in range(num):
-            ts_N = tensor_N(i, ts_S_old)
-            ts_W = tensor_W(i, ts_S_old, ts_T)
-            ts_S_new[i] = optimize_S(ts_N, ts_W)
-            error += np.linalg.norm(ts_S_new[i] - ts_S_old[i])
-        ts_S_old = ts_S_new.copy()
+            ts_N = tensor_N(i, ts_S_new)
+            ts_W = tensor_W(i, ts_S_new, ts_T)
+            ts_Temp = optimize_S(ts_N, ts_W)
+            error += np.linalg.norm(ts_Temp - ts_S_old[i])
+            ts_S_new[i] = ts_Temp
+    # ts_S_old = ts_S_new.copy()
     # construct new tensors TA/TB from the optimized 8 S's
     # transposition is needed
     ts_S_new[0] = np.einsum('dcj->cjd',ts_S_new[0])
