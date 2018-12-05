@@ -8,5 +8,3 @@ filtering.py: entanglement filtering
 optimizing.py: change the square lattice to octagon
 
 main.py: do the RG transform and calculate the thermodynamic quantities
-
-Feature_Playground: some short codes for test purposes
