@@ -9,6 +9,7 @@
 
 import numpy as np
 from itertools import product
+# from sympy import *
 
 # get the initial value of the 8 S's using SVD
 # ts_T: the tuple of tensors (TA, TB)
@@ -114,40 +115,26 @@ def tensor_W(i, ts_S, ts_T):
     ts_T_list.append(np.einsum('qdcp->cpqd', ts_T[0]))
     ts_T_list.append(np.einsum('liad->dlia', ts_T[1]))
 
+    # contract the complete part
+    for p in range(pair + 1, pair + 4):
+        # j takes the value p+1, ... 3, 0, ..., p-1
+        if p <= 3:
+            j = p
+        elif p >= 4:
+            j = p - 4
+        ts_B = np.einsum('dpm,mqn,gpqr->dngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T_list[j])
+        if p == pair + 1:
+            ts_Complete = ts_B
+        else:
+            ts_Complete = np.einsum('bngr,ndrf->bdgf', ts_Complete, ts_B)
+    
+    # contract the incomplete part
     if i % 2 == 0:              # W starts with C
-        for p in range(pair, pair + 4):
-            # j takes the value p, p+1, ... 3, 0, ..., p-1
-            if p <= 3:
-                j = p
-            elif p >= 4:
-                j = p - 4
-
-            if p == pair:       # W starts with C
-                ts_C = np.einsum('bed,fceg->bdfcg', ts_S_conj[i+1], ts_T_list[j])
-                ts_W = ts_C
-            elif p == pair + 3: # contract with the last tensor (B)
-                ts_B = np.einsum('dpm,mqn,gpqr->dngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T_list[j])
-                ts_W = np.einsum('bdfcg,dagf->bac', ts_W, ts_B)
-            else: 
-                ts_B = np.einsum('dpm,mqn,gpqr->dngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T_list[j])
-                ts_W = np.einsum('bdfcg,dngr->bnfcr', ts_W, ts_B)
-
+        ts_C = np.einsum('bed,fceg->bdfcg', ts_S_conj[i+1], ts_T_list[pair])
+        ts_W = np.einsum('bdfcg,dagf->bac', ts_C, ts_Complete)
     elif i % 2 != 0:            # W starts with B
-        for p in range(pair, pair + 4):
-            if p <= 3:
-                j = p
-            elif p >= 4:
-                j = p - 4
-
-            if p == pair:       # W starts with B
-                ts_B = np.einsum('bpm,mqn,gpqr->bngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T_list[j])
-                ts_W = ts_B
-            elif p == pair + 3: # contract with the last tensor (C)
-                ts_C = np.einsum('dea,fecg->dafcg', np.conj(ts_S[i-1]), ts_T_list[j])
-                ts_W = np.einsum('bdgf,dafcg->bac', ts_W, ts_C)
-            else:
-                ts_B = np.einsum('bpm,mqn,gpqr->bngr', ts_S_conj[2*j], ts_S_conj[2*j+1], ts_T_list[j])
-                ts_W = np.einsum('bngr,ndrf->bdgf', ts_W, ts_B)
+        ts_C = np.einsum('dea,fecg->dafcg', ts_S_conj[i-1], ts_T_list[pair])
+        ts_W = np.einsum('bdgf,dafcg->bac', ts_Complete, ts_C)
     return ts_W
 
 # solve the equation (N_i)(S_i) = (W_i) for (S_i)
@@ -158,7 +145,8 @@ def optimize_S(ts_N, ts_W):
     # convert tensor W_(abe) to matrix W_(ab,e)
     mat_W = ts_W.reshape((ts_W.shape[0]*ts_W.shape[1], ts_W.shape[2]))
     # find matrix S'_(cd,e)
-    mat_S = np.dot(np.linalg.inv(mat_N), mat_W)
+    # mat_S = np.dot(np.linalg.inv(mat_N), mat_W)
+    mat_S = np.linalg.solve(mat_N, mat_W)
     # convert matrix S' to tensor S'_(cde)
     ts_S = mat_S.reshape((ts_N.shape[2], ts_N.shape[3], ts_W.shape[2]))
     # find the required S using S_(dec) = S'_(cde)
@@ -173,9 +161,8 @@ def cost_func(i, ts_S, ts_T):
     term2 = np.einsum('cea,acbd,deb',np.conj(ts_S[i]),ts_N,ts_S[i])
 
     ts_W = tensor_W(i, ts_S, ts_T)
-    ts_W = np.einsum('bac->acb',ts_W)
-    term3 = np.einsum('acb,acb',ts_S[i],np.conj(ts_W))
-    term4 = np.einsum('acb,acb',np.conj(ts_S[i]),ts_W)
+    term3 = np.einsum('acb,bac',ts_S[i],np.conj(ts_W))
+    term4 = np.einsum('acb,bac',np.conj(ts_S[i]),ts_W)
 
     return term1 + term2 - term3 - term4
 
@@ -192,35 +179,37 @@ def loop_optimize(ts_T, d_cut, error_limit):
     ts_S_old = list(ts_S_old)
     ts_S_new = ts_S_old.copy()
     num = len(ts_S_old)    # should be 8
-    for i in range(num):
-        cost = cost_func(i, ts_S_new, ts_T)
-        print('S', i, '\tcost = ', cost)
+    
     # loop-optimizing the 8 S's
     # if used_cutoff == 0:
     #     pass
     # elif used_cutoff == 1:
     loop_round = 0
     while (error > error_limit):
-        error = 0.0
+        cost_old = cost_func(0, ts_S_new, ts_T)
         for i in range(num):
             ts_N = tensor_N(i, ts_S_new)
             ts_W = tensor_W(i, ts_S_new, ts_T)
-            ts_Temp = optimize_S(ts_N, ts_W)
-            error += np.linalg.norm(ts_Temp - ts_S_old[i])
-            ts_S_new[i] = ts_Temp
+            ts_S_new[i] = optimize_S(ts_N, ts_W)
+        cost_new = cost_func(0, ts_S_new, ts_T)
+        error_raw = cost_new - cost_old
+        error = np.abs(error_raw)
         loop_round += 1
-    # ts_S_old = ts_S_new.copy()
+
     # construct new tensors TA/TB from the optimized 8 S's
     # transposition is needed
-    ts_S_new[0] = np.einsum('dcj->cjd',ts_S_new[0])
-    ts_S_new[1] = np.einsum('lba->alb',ts_S_new[1])
-    ts_S_new[2] = np.einsum('adk->dka',ts_S_new[2])
-    ts_S_new[3] = np.einsum('icb->bic',ts_S_new[3])
-    ts_S_new[4] = np.einsum('bal->alb',ts_S_new[4])
-    ts_S_new[5] = np.einsum('jdc->cjd',ts_S_new[5])
-    ts_S_new[6] = np.einsum('cbi->bic',ts_S_new[6])
-    ts_S_new[7] = np.einsum('kad->dka',ts_S_new[7])
+    # ts_S_new[0] = np.einsum('dcj->cjd',ts_S_new[0])
+    # ts_S_new[1] = np.einsum('lba->alb',ts_S_new[1])
+    # ts_S_new[2] = np.einsum('adk->dka',ts_S_new[2])
+    # ts_S_new[3] = np.einsum('icb->bic',ts_S_new[3])
+    # ts_S_new[4] = np.einsum('bal->alb',ts_S_new[4])
+    # ts_S_new[5] = np.einsum('jdc->cjd',ts_S_new[5])
+    # ts_S_new[6] = np.einsum('cbi->bic',ts_S_new[6])
+    # ts_S_new[7] = np.einsum('kad->dka',ts_S_new[7])
 
-    ts_TA = np.einsum('alb,bic,cjd,dka->lijk',ts_S_new[4],ts_S_new[3],ts_S_new[0],ts_S_new[7])
-    ts_TB = np.einsum('alb,bic,cjd,dka->lijk',ts_S_new[1],ts_S_new[6],ts_S_new[5],ts_S_new[2])
+    # ts_TA = np.einsum('alb,bic,cjd,dka->lijk',ts_S_new[4],ts_S_new[3],ts_S_new[0],ts_S_new[7])
+    # ts_TB = np.einsum('alb,bic,cjd,dka->lijk',ts_S_new[1],ts_S_new[6],ts_S_new[5],ts_S_new[2])
+
+    ts_TA = np.einsum('bal,icb,dcj,kad->lijk',ts_S_new[4],ts_S_new[3],ts_S_new[0],ts_S_new[7])
+    ts_TB = np.einsum('lba,cbi,jdc,adk->lijk',ts_S_new[1],ts_S_new[6],ts_S_new[5],ts_S_new[2])
     return ts_TA, ts_TB

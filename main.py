@@ -12,7 +12,7 @@ import filtering as flt
 import optimizing as opt
 from itertools import product
 
-temperature = 10
+temperature = 3
 
 # assign the initial value of tensor TA, TB (2D Ising model)
 ts_T_A0 = np.ones((2,2,2,2),dtype=complex)
@@ -30,13 +30,13 @@ gamma_B0 = np.einsum('lulu', ts_T_B0)
 ts_TN_A0 = ts_T_A0 / gamma_A0
 ts_TN_B0 = ts_T_B0 / gamma_B0
 
-for i in range(1):
+for i in range(8):
     # normalized partition function for 4 sites
     part_ZN0 = np.einsum('ajkb,cbmj,mdci,kiad', ts_TN_A0,ts_TN_B0,ts_TN_A0,ts_TN_B0)
     # entanglement filtering
     ts_T_A1, ts_T_B1 = flt.filter(ts_TN_A0, ts_TN_B0, 1.0E-12)
     # loop optimize to find the new tensors
-    ts_T_A1, ts_T_B1 = opt.loop_optimize((ts_T_A1,ts_T_B1), 16, 1E-10)
+    ts_T_A1, ts_T_B1 = opt.loop_optimize((ts_T_A1,ts_T_B1), 16, 1E-6)
     # tensor normalization constant
     gamma_A1 = np.einsum('lulu', ts_T_A1)
     gamma_B1 = np.einsum('lulu', ts_T_B1)
