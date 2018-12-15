@@ -20,7 +20,9 @@ def left_one_circle(ts_rearranged,L_old,D):
     for i in range(4):
         new_L = contract_and_qr(old_L,ts_rearranged[i],D)
         old_L = new_L
-    new_L = new_L/new_L.max()
+    # find the maximal absolute value of new_L
+    max_v = np.abs(max(new_L.max(), new_L.min(), key = abs))
+    new_L = new_L/max_v
     return new_L
 
 def find_error(mat1,mat2,D):
@@ -38,15 +40,15 @@ def left_fixed_point(T1,T2,T3,T4,D):
         ts_original = (T1,T2,T3,T4)
         epsilon = 1.e-10
         error = 1.0
-        L_old = np.ones([D,D])
-        L_new = np.ones([D,D])
+        L_old = np.identity(D)
+        L_new = L_old.copy()
         iteration = 0
 
         ts_rearranged = rearrange_indice(T1,T2,T3,T4)
         ts_rearranged_with_i = (ts_rearranged[(0+i)%4],ts_rearranged[(1+i)%4],
                                 ts_rearranged[(2+i)%4],ts_rearranged[(3+i)%4])
 
-        while(error > epsilon and iteration < 30):
+        while(error > epsilon and iteration < 50):
             L_new = left_one_circle(ts_rearranged_with_i,L_old,D)
             error = find_error(L_old, L_new, D)
             L_old = L_new
@@ -71,7 +73,8 @@ def right_one_circle(ts_rearranged,R_old,D):
     for i in range(4):
         new_R = contract_and_lq(old_R,ts_rearranged[-i],D)
         old_R = new_R
-    new_R = new_R/new_R.max()
+    max_v = np.abs(max(new_R.max(), new_R.min(), key = abs))
+    new_R = new_R/max_v
     return new_R
 
 def right_fixed_point(T1,T2,T3,T4,D):
@@ -82,8 +85,8 @@ def right_fixed_point(T1,T2,T3,T4,D):
         ts_original = (T1,T2,T3,T4)
         epsilon = 1.e-10
         error = 1.0
-        R_old = np.ones([D,D])
-        R_new = np.ones([D,D])
+        R_old = np.identity(D)
+        R_new = R_old.copy()
         iteration = 0
 
         ts_rearranged = rearrange_indice(T1,T2,T3,T4)
